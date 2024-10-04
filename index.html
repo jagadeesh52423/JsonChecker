@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advanced MongoDB-style JSON Diff Checker</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&family=Fira+Code&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Advanced MongoDB-style JSON Diff Checker</h1>
+        
+        <div class="input-container">
+            <div class="input-group">
+                <h2>JSON 1</h2>
+                <textarea id="json1" placeholder="Enter your first JSON here"></textarea>
+                <div class="button-container">
+                    <button class="format-btn" onclick="formatJSON(1)">Format JSON</button>
+                </div>
+            </div>
+            
+            <div class="input-group">
+                <h2>JSON 2</h2>
+                <textarea id="json2" placeholder="Enter your second JSON here"></textarea>
+                <div class="button-container">
+                    <button class="format-btn" onclick="formatJSON(2)">Format JSON</button>
+                </div>
+            </div>
+        </div>
+        
+        <button class="compare-btn" onclick="compareJSON()">Compare JSONs</button>
+        
+        <div id="output-container">
+            <h2>Comparison Result</h2>
+            <pre id="output"></pre>
+        </div>
+    </div>
+    
+    <script src="script.js"></script>
+</body>
+</html>
