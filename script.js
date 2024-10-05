@@ -19,17 +19,47 @@ function compareJSON() {
 }
 
 function parseMongoJSON(jsonString) {
+    // First, replace MongoDB-specific types with placeholder strings
     jsonString = jsonString.replace(/ObjectId\("([^"]*)"\)/g, '"ObjectId:$1"');
     jsonString = jsonString.replace(/NumberInt\((\d+)\)/g, '"NumberInt:$1"');
+    jsonString = jsonString.replace(/ISODate\("([^"]*)"\)/g, '"ISODate:$1"');
 
-    return JSON.parse(jsonString, (key, value) => {
+    // Parse the modified JSON string
+    const parsed = JSON.parse(jsonString);
+
+    // Recursive function to replace placeholder strings with actual objects
+    function reviver(key, value) {
         if (typeof value === 'string') {
-            if (value.startsWith('ObjectId:') || value.startsWith('NumberInt:')) {
-                return value;
+            if (value.startsWith('ObjectId:')) {
+                return { $type: 'ObjectId', $value: value.slice(9) };
+            } else if (value.startsWith('NumberInt:')) {
+                return { $type: 'NumberInt', $value: parseInt(value.slice(10)) };
+            } else if (value.startsWith('ISODate:')) {
+                return { $type: 'ISODate', $value: value.slice(8) };
             }
         }
         return value;
-    });
+    }
+
+    // Apply the reviver function to the parsed object
+    return JSON.parse(JSON.stringify(parsed), reviver);
+}
+
+// Update stringifyMongoJSON function as well
+function stringifyMongoJSON(obj) {
+    return JSON.stringify(obj, (key, value) => {
+        if (value && typeof value === 'object' && '$type' in value && '$value' in value) {
+            switch(value.$type) {
+                case 'ObjectId':
+                    return `ObjectId("${value.$value}")`;
+                case 'NumberInt':
+                    return `NumberInt(${value.$value})`;
+                case 'ISODate':
+                    return `ISODate("${value.$value}")`;
+            }
+        }
+        return value;
+    }, 2);
 }
 
 function compareObjects(obj1, obj2) {
@@ -119,13 +149,13 @@ function displayResult(result) {
                 output += stringifyWithColor(value, indent + 2);
             } else {
                 if (value.status === 'only_in_first') {
-                    displayValue = `<span class="red value">${JSON.stringify(value.value)}</span>`;
+                    displayValue = `<span class="red value">${stringifyMongoJSON(value.value)}</span>`;
                 } else if (value.status === 'only_in_second') {
-                    displayValue = `<span class="green value">${JSON.stringify(value.value)}</span>`;
+                    displayValue = `<span class="green value">${stringifyMongoJSON(value.value)}</span>`;
                 } else if (value.status === 'different') {
-                    displayValue = `<span class="red value">${JSON.stringify(value.value1)}</span> | <span class="green value">${JSON.stringify(value.value2)}</span>`;
+                    displayValue = `<span class="red value">${stringifyMongoJSON(value.value1)}</span> | <span class="green value">${stringifyMongoJSON(value.value2)}</span>`;
                 } else if (value.status === 'same') {
-                    displayValue = `<span class="value">${JSON.stringify(value.value)}</span>`;
+                    displayValue = `<span class="value">${stringifyMongoJSON(value.value)}</span>`;
                 }
                 output += displayValue;
             }
@@ -143,9 +173,90 @@ function displayResult(result) {
 function formatJSON(textareaId) {
     const textarea = document.getElementById(`json${textareaId}`);
     try {
-        const jsonObj = JSON.parse(textarea.value);
-        textarea.value = JSON.stringify(jsonObj, null, 2);
+        // Parse the MongoDB-style JSON
+        let jsonObj = parseMongoJSON(textarea.value);
+        
+        // Stringify it back with proper formatting
+        let formattedJson = stringifyMongoJSON(jsonObj);
+        
+        textarea.value = formattedJson;
     } catch (error) {
         alert(`Invalid JSON in textarea ${textareaId}: ${error.message}`);
     }
+    updateLineNumbers(textareaId);
 }
+
+function updateLineNumbers(textareaId) {
+    const textarea = document.getElementById(`json${textareaId}`);
+    const lineNumbers = document.getElementById(`lineNumbers${textareaId}`);
+    const lines = textarea.value.split('\n');
+    
+    // Create a hidden div to measure text width
+    const hiddenDiv = document.createElement('div');
+    hiddenDiv.style.cssText = `
+        position: absolute;
+        visibility: hidden;
+        height: auto;
+        width: ${textarea.clientWidth}px;
+        font-family: ${getComputedStyle(textarea).fontFamily};
+        font-size: ${getComputedStyle(textarea).fontSize};
+        white-space: pre-wrap;
+        word-wrap: break-word;
+        overflow-wrap: break-word;
+    `;
+    document.body.appendChild(hiddenDiv);
+
+    let lineNumbersHTML = '';
+    lines.forEach((line, index) => {
+        hiddenDiv.textContent = line;
+        const lineHeight = parseFloat(getComputedStyle(textarea).lineHeight);
+        const wrappedLines = Math.ceil(hiddenDiv.clientHeight / lineHeight);
+        
+        lineNumbersHTML += `<span>${index + 1}</span>`;
+        for (let i = 1; i < wrappedLines; i++) {
+            lineNumbersHTML += '<span></span>';
+        }
+    });
+
+    lineNumbers.innerHTML = lineNumbersHTML;
+    document.body.removeChild(hiddenDiv);
+}
+
+function syncScroll(textareaId) {
+    const textarea = document.getElementById(`json${textareaId}`);
+    const lineNumbers = document.getElementById(`lineNumbers${textareaId}`);
+    lineNumbers.scrollTop = textarea.scrollTop;
+}
+
+// Initialize line numbers and add event listeners
+document.addEventListener('DOMContentLoaded', function() {
+    const textareas = ['json1', 'json2'];
+    
+    textareas.forEach(id => {
+        const textarea = document.getElementById(id);
+        const lineNumbersId = `lineNumbers${id.slice(-1)}`;
+        
+        updateLineNumbers(id.slice(-1));
+        
+        textarea.addEventListener('input', () => {
+            updateLineNumbers(id.slice(-1));
+            syncScroll(id.slice(-1));
+        });
+        textarea.addEventListener('scroll', () => syncScroll(id.slice(-1)));
+        
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            updateLineNumbers(id.slice(-1));
+            syncScroll(id.slice(-1));
+        });
+        
+        // Prevent the line numbers from scrolling independently
+        document.getElementById(lineNumbersId).addEventListener('scroll', (e) => {
+            e.preventDefault();
+            e.target.scrollTop = textarea.scrollTop;
+        });
+        
+        // Trigger initial scroll sync
+        syncScroll(id.slice(-1));
+    });
+});

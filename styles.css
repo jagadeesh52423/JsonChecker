@@ -5,7 +5,7 @@ body {
     line-height: 1.6;
     margin: 0;
     padding: 20px;
-    background-color: #e6ffe6; /* Light green background */
+    background-color: #e6ffe6;
 }
 
 .container {
@@ -38,15 +38,48 @@ h1, h2 {
     margin-bottom: 10px;
 }
 
-textarea {
-    width: 100%;
-    height: 300px;
-    padding: 10px;
+.textarea-container {
+    display: flex;
     border: 1px solid #ddd;
     border-radius: 4px;
-    resize: vertical;
+    overflow: hidden;
+    height: 300px; /* Set a fixed height */
+}
+
+.line-numbers {
+    padding: 10px 5px;
+    background-color: #f0f0f0;
+    border-right: 1px solid #ddd;
     font-family: 'Fira Code', monospace;
     font-size: 14px;
+    line-height: 1.5;
+    text-align: right;
+    user-select: none;
+    overflow-y: scroll;
+    width: 40px; /* Set a fixed width */
+    white-space: pre;
+}
+
+.line-numbers span {
+    display: block;
+    padding-right: 5px;
+    color: #999;
+    height: 21px; /* Match the line-height of the textarea */
+}
+
+textarea {
+    flex-grow: 1;
+    height: 100%; /* Fill the container height */
+    padding: 10px;
+    border: none;
+    border-radius: 0 4px 4px 0;
+    resize: none; /* Disable manual resizing */
+    font-family: 'Fira Code', monospace;
+    font-size: 14px;
+    line-height: 1.5;
+    overflow-y: scroll;
+    white-space: pre-wrap;
+    word-wrap: break-word;
 }
 
 .button-container {
@@ -102,17 +135,17 @@ button:hover {
 }
 
 .key {
-    color: #0000FF; /* Blue for keys */
+    color: #0000FF;
     font-weight: bold;
 }
 
 .value {
-    color: #008000; /* Green for values */
+    color: #008000;
 }
 
 .red { 
     background-color: #ffcccc;
-    color: #333; /* Darker text for better contrast */
+    color: #333;
     padding: 2px 4px;
     border-radius: 2px;
 }
