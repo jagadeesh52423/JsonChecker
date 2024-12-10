@@ -43,43 +43,44 @@ h1, h2 {
     border: 1px solid #ddd;
     border-radius: 4px;
     overflow: hidden;
-    height: 300px; /* Set a fixed height */
-}
-
-.line-numbers {
-    padding: 10px 5px;
-    background-color: #f0f0f0;
-    border-right: 1px solid #ddd;
-    font-family: 'Fira Code', monospace;
-    font-size: 14px;
-    line-height: 1.5;
-    text-align: right;
-    user-select: none;
-    overflow-y: scroll;
-    width: 40px; /* Set a fixed width */
-    white-space: pre;
-}
-
-.line-numbers span {
-    display: block;
-    padding-right: 5px;
-    color: #999;
-    height: 21px; /* Match the line-height of the textarea */
+    height: 300px;
+    position: relative;
 }
 
 textarea {
     flex-grow: 1;
-    height: 100%; /* Fill the container height */
+    height: 100%;
     padding: 10px;
     border: none;
-    border-radius: 0 4px 4px 0;
-    resize: none; /* Disable manual resizing */
+    border-radius: 4px;
+    resize: none;
     font-family: 'Fira Code', monospace;
     font-size: 14px;
     line-height: 1.5;
     overflow-y: scroll;
     white-space: pre-wrap;
     word-wrap: break-word;
+}
+
+.invalid-json {
+    border: 2px solid #ff0000;
+}
+
+.warning-container {
+    margin-top: 10px;
+}
+
+.warning {
+    color: #ff0000;
+    font-size: 14px;
+    margin-bottom: 5px;
+}
+
+.error-indicator {
+    position: absolute;
+    font-size: 18px;
+    color: #ff0000;
+    cursor: pointer;
 }
 
 .button-container {
@@ -140,7 +141,7 @@ button:hover {
 }
 
 .value {
-    color: #008000;
+    color: #000000;
 }
 
 .red { 
@@ -157,6 +158,13 @@ button:hover {
     border-radius: 2px;
 }
 
+/* New styles for better diff visualization */
+.diff-separator {
+    color: #999;
+    font-weight: bold;
+    margin: 0 5px;
+}
+
 @keyframes fadeIn {
     from { opacity: 0; }
     to { opacity: 1; }
@@ -164,4 +172,18 @@ button:hover {
 
 .fade-in {
     animation: fadeIn 0.5s ease-in;
+}
+
+.invalid-json {
+    border: 2px solid #ff0000;
+}
+
+.warning-container {
+    margin-top: 10px;
+}
+
+.warning {
+    color: #ff0000;
+    font-size: 14px;
+    margin-bottom: 5px;
 }

@@ -1,3 +1,62 @@
+function validateJSON(textareaId) {
+    const textarea = document.getElementById(`json${textareaId}`);
+    const warningContainer = document.getElementById(`warnings${textareaId}`);
+    warningContainer.innerHTML = '';
+    
+    // Remove previous error indicators
+    const existingIndicators = textarea.parentNode.querySelectorAll('.error-indicator');
+    existingIndicators.forEach(indicator => indicator.remove());
+
+    try {
+        parseMongoJSON(textarea.value);
+        textarea.classList.remove('invalid-json');
+    } catch (error) {
+        textarea.classList.add('invalid-json');
+        const errorMessage = error.message;
+        warningContainer.innerHTML = `<div class="warning">${errorMessage}</div>`;
+
+        // Extract line number from error message
+        const lineMatch = errorMessage.match(/line (\d+)/);
+        if (lineMatch) {
+            const lineNumber = parseInt(lineMatch[1], 10);
+            highlightErrorLine(textarea, lineNumber);
+        } else {
+            // Extract position from error message
+            const positionMatch = errorMessage.match(/position (\d+)/);
+            if (positionMatch) {
+                const position = parseInt(positionMatch[1], 10);
+                const lineNumber = calculateLineNumberFromPosition(textarea.value, position);
+                highlightErrorLine(textarea, lineNumber);
+            }
+        }
+    }
+}
+
+function calculateLineNumberFromPosition(text, position) {
+    const lines = text.substring(0, position).split('\n');
+    return lines.length; // The line number where the error occurred
+}
+
+function highlightErrorLine(textarea, lineNumber) {
+    const lines = textarea.value.split('\n');
+    if (lineNumber > 0 && lineNumber <= lines.length) {
+        const errorLine = lines[lineNumber - 1];
+        const precedingText = lines.slice(0, lineNumber - 1).join('\n');
+        const errorLineStart = precedingText.length + (precedingText ? 1 : 0); // +1 for newline, if any
+
+        // Create and position the error indicator
+        const indicator = document.createElement('div');
+        indicator.className = 'error-indicator';
+        indicator.textContent = '⚠️'; // Unicode warning symbol
+        
+        const { top, left } = getErrorIndicatorPosition(textarea, errorLineStart);
+        indicator.style.top = `${top}px`;
+        indicator.style.left = `${left}px`;
+
+        textarea.parentNode.appendChild(indicator);
+    }
+}
+
 function compareJSON() {
     const json1 = document.getElementById('json1').value;
     const json2 = document.getElementById('json2').value;
@@ -19,47 +78,26 @@ function compareJSON() {
 }
 
 function parseMongoJSON(jsonString) {
-    // First, replace MongoDB-specific types with placeholder strings
+    // Handle MongoDB-specific types
     jsonString = jsonString.replace(/ObjectId\("([^"]*)"\)/g, '"ObjectId:$1"');
     jsonString = jsonString.replace(/NumberInt\((\d+)\)/g, '"NumberInt:$1"');
+    jsonString = jsonString.replace(/NumberLong\((\d+)\)/g, '"NumberLong:$1"');
     jsonString = jsonString.replace(/ISODate\("([^"]*)"\)/g, '"ISODate:$1"');
 
-    // Parse the modified JSON string
-    const parsed = JSON.parse(jsonString);
-
-    // Recursive function to replace placeholder strings with actual objects
-    function reviver(key, value) {
+    return JSON.parse(jsonString, (key, value) => {
         if (typeof value === 'string') {
             if (value.startsWith('ObjectId:')) {
                 return { $type: 'ObjectId', $value: value.slice(9) };
             } else if (value.startsWith('NumberInt:')) {
                 return { $type: 'NumberInt', $value: parseInt(value.slice(10)) };
+            } else if (value.startsWith('NumberLong:')) {
+                return { $type: 'NumberLong', $value: parseInt(value.slice(10)) };
             } else if (value.startsWith('ISODate:')) {
                 return { $type: 'ISODate', $value: value.slice(8) };
             }
         }
         return value;
-    }
-
-    // Apply the reviver function to the parsed object
-    return JSON.parse(JSON.stringify(parsed), reviver);
-}
-
-// Update stringifyMongoJSON function as well
-function stringifyMongoJSON(obj) {
-    return JSON.stringify(obj, (key, value) => {
-        if (value && typeof value === 'object' && '$type' in value && '$value' in value) {
-            switch(value.$type) {
-                case 'ObjectId':
-                    return `ObjectId("${value.$value}")`;
-                case 'NumberInt':
-                    return `NumberInt(${value.$value})`;
-                case 'ISODate':
-                    return `ISODate("${value.$value}")`;
-            }
-        }
-        return value;
-    }, 2);
+    });
 }
 
 function compareObjects(obj1, obj2) {
@@ -94,6 +132,85 @@ function compareObjects(obj1, obj2) {
     return result;
 }
 
+function displayResult(result) {
+    const outputDiv = document.getElementById('output');
+
+    function stringifyWithColor(obj, indent = 0) {
+        if (Array.isArray(obj)) {
+            if (obj.length === 0) return '[]';
+            let output = '[\n';
+            for (let i = 0; i < obj.length; i++) {
+                const padding = ' '.repeat(indent + 2);
+                output += padding + stringifyWithColor(obj[i], indent + 2);
+                if (i < obj.length - 1) output += ',';
+                output += '\n';
+            }
+            output += ' '.repeat(indent) + ']';
+            return output;
+        }
+
+        if (typeof obj !== 'object' || obj === null) {
+            return JSON.stringify(obj);
+        }
+
+        const keys = Object.keys(obj);
+        if (keys.length === 0) return '{}';
+
+        let output = '{\n';
+        for (let i = 0; i < keys.length; i++) {
+            const key = keys[i];
+            const value = obj[key];
+            const padding = ' '.repeat(indent + 2);
+
+            output += `${padding}<span class="key">"${key}"</span>: `;
+
+            if (typeof value === 'object' && value !== null && !('status' in value)) {
+                output += stringifyWithColor(value, indent + 2);
+            } else if (value && typeof value === 'object' && 'status' in value) {
+                if (value.status === 'only_in_first') {
+                    output += `<span class="red value">${stringifyMongoJSON(value.value, indent + 2)}</span>`;
+                } else if (value.status === 'only_in_second') {
+                    output += `<span class="green value">${stringifyMongoJSON(value.value, indent + 2)}</span>`;
+                } else if (value.status === 'different') {
+                    output += `<span class="red value">${stringifyMongoJSON(value.value1, indent + 2)}</span> <span class="diff-separator">|</span> <span class="green value">${stringifyMongoJSON(value.value2, indent + 2)}</span>`;
+                } else if (value.status === 'same') {
+                    output += `<span class="value">${stringifyMongoJSON(value.value, indent + 2)}</span>`;
+                }
+            } else {
+                output += `<span class="value">${stringifyMongoJSON(value, indent + 2)}</span>`;
+            }
+
+            if (i < keys.length - 1) output += ',';
+            output += '\n';
+        }
+        output += ' '.repeat(indent) + '}';
+        return output;
+    }
+
+    const coloredJson = stringifyWithColor(result);
+    outputDiv.innerHTML = coloredJson;
+}
+
+function stringifyMongoJSON(obj, indent = 0) {
+    return JSON.stringify(obj, (key, value) => {
+        if (value && typeof value === 'object' && '$type' in value && '$value' in value) {
+            switch(value.$type) {
+                case 'ObjectId':
+                    return `ObjectId("${value.$value}")`;
+                case 'NumberInt':
+                    return `NumberInt(${value.$value})`;
+                case 'NumberLong':
+                    return `NumberLong(${value.$value})`;
+                case 'ISODate':
+                    return `ISODate("${value.$value}")`;
+            }
+        }
+        return value;
+    }, indent)
+    .replace(/^/gm, ' '.repeat(indent)) // Add indentation to each line
+    .replace(/\\n/g, '\n' + ' '.repeat(indent)); // Handle newlines within strings
+}
+
 function compareArrays(arr1, arr2) {
     const result = [];
     const maxLength = Math.max(arr1.length, arr2.length);
@@ -118,145 +235,30 @@ function compareArrays(arr1, arr2) {
     return result;
 }
 
-function displayResult(result) {
-    const outputDiv = document.getElementById('output');
-
-    function stringifyWithColor(obj, indent = 0) {
-        if (Array.isArray(obj)) {
-            let output = '[\n';
-            for (const item of obj) {
-                const padding = ' '.repeat(indent + 2);
-                output += padding + stringifyWithColor(item, indent + 2) + ',\n';
-            }
-            if (output.endsWith(',\n')) {
-                output = output.slice(0, -2) + '\n';
-            }
-            output += ' '.repeat(indent) + ']';
-            return output;
-        }
-
-        if (typeof obj !== 'object' || obj === null) {
-            return JSON.stringify(obj);
-        }
-
-        let output = '{\n';
-        for (const [key, value] of Object.entries(obj)) {
-            const padding = ' '.repeat(indent + 2);
-            let displayValue = '';
-
-            output += `${padding}<span class="key">"${key}"</span>: `;
-            if (typeof value === 'object' && !('status' in value)) {
-                output += stringifyWithColor(value, indent + 2);
-            } else {
-                if (value.status === 'only_in_first') {
-                    displayValue = `<span class="red value">${stringifyMongoJSON(value.value)}</span>`;
-                } else if (value.status === 'only_in_second') {
-                    displayValue = `<span class="green value">${stringifyMongoJSON(value.value)}</span>`;
-                } else if (value.status === 'different') {
-                    displayValue = `<span class="red value">${stringifyMongoJSON(value.value1)}</span> | <span class="green value">${stringifyMongoJSON(value.value2)}</span>`;
-                } else if (value.status === 'same') {
-                    displayValue = `<span class="value">${stringifyMongoJSON(value.value)}</span>`;
-                }
-                output += displayValue;
-            }
-            output += ',\n';
-        }
-        output = output.slice(0, -2) + '\n'; // Remove last comma and add newline
-        output += ' '.repeat(indent) + '}';
-        return output;
-    }
-
-    const coloredJson = stringifyWithColor(result);
-    outputDiv.innerHTML = coloredJson;
-}
-
 function formatJSON(textareaId) {
     const textarea = document.getElementById(`json${textareaId}`);
     try {
-        // Parse the MongoDB-style JSON
         let jsonObj = parseMongoJSON(textarea.value);
-        
-        // Stringify it back with proper formatting
         let formattedJson = stringifyMongoJSON(jsonObj);
-        
         textarea.value = formattedJson;
+        validateJSON(textareaId);
     } catch (error) {
         alert(`Invalid JSON in textarea ${textareaId}: ${error.message}`);
     }
-    updateLineNumbers(textareaId);
 }
 
-function updateLineNumbers(textareaId) {
-    const textarea = document.getElementById(`json${textareaId}`);
-    const lineNumbers = document.getElementById(`lineNumbers${textareaId}`);
-    const lines = textarea.value.split('\n');
-    
-    // Create a hidden div to measure text width
-    const hiddenDiv = document.createElement('div');
-    hiddenDiv.style.cssText = `
-        position: absolute;
-        visibility: hidden;
-        height: auto;
-        width: ${textarea.clientWidth}px;
-        font-family: ${getComputedStyle(textarea).fontFamily};
-        font-size: ${getComputedStyle(textarea).fontSize};
-        white-space: pre-wrap;
-        word-wrap: break-word;
-        overflow-wrap: break-word;
-    `;
-    document.body.appendChild(hiddenDiv);
-
-    let lineNumbersHTML = '';
-    lines.forEach((line, index) => {
-        hiddenDiv.textContent = line;
-        const lineHeight = parseFloat(getComputedStyle(textarea).lineHeight);
-        const wrappedLines = Math.ceil(hiddenDiv.clientHeight / lineHeight);
-        
-        lineNumbersHTML += `<span>${index + 1}</span>`;
-        for (let i = 1; i < wrappedLines; i++) {
-            lineNumbersHTML += '<span></span>';
-        }
-    });
-
-    lineNumbers.innerHTML = lineNumbersHTML;
-    document.body.removeChild(hiddenDiv);
-}
-
-function syncScroll(textareaId) {
-    const textarea = document.getElementById(`json${textareaId}`);
-    const lineNumbers = document.getElementById(`lineNumbers${textareaId}`);
-    lineNumbers.scrollTop = textarea.scrollTop;
-}
-
-// Initialize line numbers and add event listeners
+// Initialize validation on page load
 document.addEventListener('DOMContentLoaded', function() {
-    const textareas = ['json1', 'json2'];
+    validateJSON('1');
+    validateJSON('2');
     
-    textareas.forEach(id => {
-        const textarea = document.getElementById(id);
-        const lineNumbersId = `lineNumbers${id.slice(-1)}`;
-        
-        updateLineNumbers(id.slice(-1));
-        
-        textarea.addEventListener('input', () => {
-            updateLineNumbers(id.slice(-1));
-            syncScroll(id.slice(-1));
-        });
-        textarea.addEventListener('scroll', () => syncScroll(id.slice(-1)));
-        
-        // Handle window resize
-        window.addEventListener('resize', () => {
-            updateLineNumbers(id.slice(-1));
-            syncScroll(id.slice(-1));
-        });
-        
-        // Prevent the line numbers from scrolling independently
-        document.getElementById(lineNumbersId).addEventListener('scroll', (e) => {
-            e.preventDefault();
-            e.target.scrollTop = textarea.scrollTop;
-        });
-        
-        // Trigger initial scroll sync
-        syncScroll(id.slice(-1));
-    });
+    // Add event listeners for textarea changes
+    document.getElementById('json1').addEventListener('input', () => validateJSON('1'));
+    document.getElementById('json2').addEventListener('input', () => validateJSON('2'));
+});
+
+// Add window resize listener
+window.addEventListener('resize', () => {
+    validateJSON('1');
+    validateJSON('2');
 });
