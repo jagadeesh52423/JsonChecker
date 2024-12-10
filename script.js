@@ -78,23 +78,24 @@ function compareJSON() {
 }
 
 function parseMongoJSON(jsonString) {
-    // Handle MongoDB-specific types
-    jsonString = jsonString.replace(/ObjectId\("([^"]*)"\)/g, '"ObjectId:$1"');
-    jsonString = jsonString.replace(/NumberInt\((\d+)\)/g, '"NumberInt:$1"');
-    jsonString = jsonString.replace(/NumberLong\((\d+)\)/g, '"NumberLong:$1"');
-    jsonString = jsonString.replace(/ISODate\("([^"]*)"\)/g, '"ISODate:$1"');
+    // Add support for more MongoDB types
+    const mongoTypes = {
+        ObjectId: /ObjectId\("([^"]*)"\)/g,
+        NumberInt: /NumberInt\((\d+)\)/g,
+        ISODate: /ISODate\("([^"]*)"\)/g,
+        NumberLong: /NumberLong\("?(\d+)"?\)/g,
+        NumberDecimal: /NumberDecimal\("([^"]*)"\)/g,
+        Timestamp: /Timestamp\((\d+), (\d+)\)/g
+    };
+
+    Object.entries(mongoTypes).forEach(([type, regex]) => {
+        jsonString = jsonString.replace(regex, `"${type}:$1"`)
+    });
 
     return JSON.parse(jsonString, (key, value) => {
         if (typeof value === 'string') {
-            if (value.startsWith('ObjectId:')) {
-                return { $type: 'ObjectId', $value: value.slice(9) };
-            } else if (value.startsWith('NumberInt:')) {
-                return { $type: 'NumberInt', $value: parseInt(value.slice(10)) };
-            } else if (value.startsWith('NumberLong:')) {
-                return { $type: 'NumberLong', $value: parseInt(value.slice(10)) };
-            } else if (value.startsWith('ISODate:')) {
-                return { $type: 'ISODate', $value: value.slice(8) };
-            }
+            const [type] = Object.keys(mongoTypes).filter(t => value.startsWith(`${t}:`));
+            return type ? value : value;
         }
         return value;
     });
@@ -132,18 +133,19 @@ function compareObjects(obj1, obj2) {
     return result;
 }
 
+
 function displayResult(result) {
     const outputDiv = document.getElementById('output');
 
     function stringifyWithColor(obj, indent = 0) {
         if (Array.isArray(obj)) {
-            if (obj.length === 0) return '[]';
             let output = '[\n';
-            for (let i = 0; i < obj.length; i++) {
+            for (const item of obj) {
                 const padding = ' '.repeat(indent + 2);
-                output += padding + stringifyWithColor(obj[i], indent + 2);
-                if (i < obj.length - 1) output += ',';
-                output += '\n';
+                output += padding + stringifyWithColor(item, indent + 2) + ',\n';
+            }
+            if (output.endsWith(',\n')) {
+                output = output.slice(0, -2) + '\n';
             }
             output += ' '.repeat(indent) + ']';
             return output;
@@ -153,62 +155,35 @@ function displayResult(result) {
             return JSON.stringify(obj);
         }
 
-        const keys = Object.keys(obj);
-        if (keys.length === 0) return '{}';
-
         let output = '{\n';
-        for (let i = 0; i < keys.length; i++) {
-            const key = keys[i];
-            const value = obj[key];
+        for (const [key, value] of Object.entries(obj)) {
             const padding = ' '.repeat(indent + 2);
+            let displayValue = '';
 
             output += `${padding}<span class="key">"${key}"</span>: `;
-
-            if (typeof value === 'object' && value !== null && !('status' in value)) {
+            if (typeof value === 'object' && !('status' in value)) {
                 output += stringifyWithColor(value, indent + 2);
-            } else if (value && typeof value === 'object' && 'status' in value) {
-                if (value.status === 'only_in_first') {
-                    output += `<span class="red value">${stringifyMongoJSON(value.value, indent + 2)}</span>`;
-                } else if (value.status === 'only_in_second') {
-                    output += `<span class="green value">${stringifyMongoJSON(value.value, indent + 2)}</span>`;
-                } else if (value.status === 'different') {
-                    output += `<span class="red value">${stringifyMongoJSON(value.value1, indent + 2)}</span> <span class="diff-separator">|</span> <span class="green value">${stringifyMongoJSON(value.value2, indent + 2)}</span>`;
-                } else if (value.status === 'same') {
-                    output += `<span class="value">${stringifyMongoJSON(value.value, indent + 2)}</span>`;
-                }
             } else {
-                output += `<span class="value">${stringifyMongoJSON(value, indent + 2)}</span>`;
+                if (value.status === 'only_in_first') {
+                    displayValue = `<span class="red value">${JSON.stringify(value.value)}</span>`;
+                } else if (value.status === 'only_in_second') {
+                    displayValue = `<span class="green value">${JSON.stringify(value.value)}</span>`;
+                } else if (value.status === 'different') {
+                    displayValue = `<span class="red value">${JSON.stringify(value.value1)}</span> | <span class="green value">${JSON.stringify(value.value2)}</span>`;
+                } else if (value.status === 'same') {
+                    displayValue = `<span class="value">${JSON.stringify(value.value)}</span>`;
+                }
+                output += displayValue;
             }
-
-            if (i < keys.length - 1) output += ',';
-            output += '\n';
+            output += ',\n';
         }
+        output = output.slice(0, -2) + '\n'; // Remove last comma and add newline
         output += ' '.repeat(indent) + '}';
         return output;
     }
 
     const coloredJson = stringifyWithColor(result);
     outputDiv.innerHTML = coloredJson;
-}
-
-function stringifyMongoJSON(obj, indent = 0) {
-    return JSON.stringify(obj, (key, value) => {
-        if (value && typeof value === 'object' && '$type' in value && '$value' in value) {
-            switch(value.$type) {
-                case 'ObjectId':
-                    return `ObjectId("${value.$value}")`;
-                case 'NumberInt':
-                    return `NumberInt(${value.$value})`;
-                case 'NumberLong':
-                    return `NumberLong(${value.$value})`;
-                case 'ISODate':
-                    return `ISODate("${value.$value}")`;
-            }
-        }
-        return value;
-    }, indent)
-    .replace(/^/gm, ' '.repeat(indent)) // Add indentation to each line
-    .replace(/\\n/g, '\n' + ' '.repeat(indent)); // Handle newlines within strings
 }
 
 function compareArrays(arr1, arr2) {
@@ -235,16 +210,64 @@ function compareArrays(arr1, arr2) {
     return result;
 }
 
+
 function formatJSON(textareaId) {
     const textarea = document.getElementById(`json${textareaId}`);
     try {
-        let jsonObj = parseMongoJSON(textarea.value);
-        let formattedJson = stringifyMongoJSON(jsonObj);
-        textarea.value = formattedJson;
-        validateJSON(textareaId);
+        const jsonObj = JSON.parse(textarea.value);
+        textarea.value = JSON.stringify(jsonObj, null, 2);
     } catch (error) {
         alert(`Invalid JSON in textarea ${textareaId}: ${error.message}`);
     }
+}
+
+function getDiffStats(result) {
+    let stats = {
+        added: 0,
+        removed: 0,
+        modified: 0,
+        unchanged: 0
+    };
+
+    function countDiffs(obj) {
+        if (Array.isArray(obj)) {
+            obj.forEach(countDiffs);
+            return;
+        }
+        
+        Object.values(obj).forEach(value => {
+            if (value.status === 'only_in_second') stats.added++;
+            else if (value.status === 'only_in_first') stats.removed++;
+            else if (value.status === 'different') stats.modified++;
+            else if (value.status === 'same') stats.unchanged++;
+            else if (typeof value === 'object') countDiffs(value);
+        });
+    }
+
+    countDiffs(result);
+    return stats;
+}
+
+function handleFileUpload(fileInput, targetTextarea) {
+    const file = fileInput.files[0];
+    if (file) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            targetTextarea.value = e.target.result;
+        };
+        reader.readAsText(file);
+    }
+}
+
+function exportDiff(result) {
+    const blob = new Blob([JSON.stringify(result, null, 2)], 
+        { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'json-diff-result.json';
+    a.click();
+    URL.revokeObjectURL(url);
 }
 
 // Initialize validation on page load

@@ -3,45 +3,40 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MongoDB-style JSON Diff Checker</title>
+    <title>Advanced MongoDB-style JSON Diff Checker</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&family=Fira+Code&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
     <div class="container">
-        <h1>MongoDB-style JSON Diff Checker</h1>
-
+        <h1>Advanced MongoDB-style JSON Diff Checker</h1>
+        
         <div class="input-container">
             <div class="input-group">
                 <h2>JSON 1</h2>
-                <div class="textarea-container">
-                    <textarea id="json1" placeholder="Enter JSON here..."></textarea>
-                </div>
-                <div id="warnings1" class="warning-container"></div>
+                <textarea id="json1" placeholder="Enter your first JSON here"></textarea>
                 <div class="button-container">
-                    <button onclick="formatJSON('1')" class="format-btn">Format JSON</button>
+                    <button class="format-btn" onclick="formatJSON(1)">Format JSON</button>
                 </div>
             </div>
-
+            
             <div class="input-group">
                 <h2>JSON 2</h2>
-                <div class="textarea-container">
-                    <textarea id="json2" placeholder="Enter JSON here..."></textarea>
-                </div>
-                <div id="warnings2" class="warning-container"></div>
+                <textarea id="json2" placeholder="Enter your second JSON here"></textarea>
                 <div class="button-container">
-                    <button onclick="formatJSON('2')" class="format-btn">Format JSON</button>
+                    <button class="format-btn" onclick="formatJSON(2)">Format JSON</button>
                 </div>
             </div>
         </div>
-
-        <button onclick="compareJSON()" class="compare-btn">Compare JSONs</button>
-
+        
+        <button class="compare-btn" onclick="compareJSON()">Compare JSONs</button>
+        
         <div id="output-container">
             <h2>Comparison Result</h2>
-            <div id="output"></div>
+            <pre id="output"></pre>
         </div>
     </div>
-
+    
     <script src="script.js"></script>
 </body>
-</html
+</html>
